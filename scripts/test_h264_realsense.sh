@@ -1,4 +1,5 @@
 #!/bin/bash
+# Retrieved by rs-enumerate-devices | grep -i serial
 export SERIAL=819112070701
 # demux.src_depth ! queue ! colorizer near-cut=300 far-cut=700 ! videoconvert ! glimagesink \
 gst-launch-1.0 realsensesrc serial=$SERIAL timestamp-mode=clock_all enable-color=true  ! \

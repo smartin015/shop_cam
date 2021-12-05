@@ -1,4 +1,5 @@
 *.pyc
 *.ts
+*.swp
 network_av 
 playlist.m3u8
