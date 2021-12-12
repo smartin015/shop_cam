@@ -1,8 +1,14 @@
+#!/usr/bin/python3
 import threading
+import os
 import time
+import sys
 from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
+from urllib.parse import urlparse
 import paho.mqtt.client as mqtt
+
+STALL_COUNT = 2
 
 def parseurl(name: str, url: str, outfile: str, already_parsed: list, client):
   try:
@@ -22,52 +28,59 @@ def parseurl(name: str, url: str, outfile: str, already_parsed: list, client):
       except HTTPError:
         continue
     client.publish("/av/status/capture/" + name, line)
-    print(line, "DONE")
+    sys.stderr.write(f"{line} DONE\n")
     new = True
   return (parsed, new)
 
-def record(name, url, outfile, client):
-    print("Listening on", url," (", name, ") --> ", outfile)
+def record(base_dir, url, client):
+    # Extract file name prefix from URL domain
+    name = urlparse(url).netloc.split(":")[0]
+    sys.stderr.write(f"Listening on {url} ({name})\n")
     last_parsed = set()
     t = threading.current_thread()
-    lastnewdata = 0
+    lastnewdata = STALL_COUNT+1
     while t.alive:
+      if lastnewdata > STALL_COUNT:
+        outfile = os.path.join(base_dir, f"{name}_{int(time.time())}.ts")
       (last_parsed, newdata) = parseurl(name, url, outfile, last_parsed, client)
+      if newdata and lastnewdata > STALL_COUNT:
+        sys.stderr.write(f"new stream: {outfile}")
       lastnewdata = 0 if newdata else lastnewdata + 1
-      if lastnewdata > 2: # Treat stalled pipeline as offline
+      if lastnewdata > STALL_COUNT: # Treat stalled pipeline as offline
         client.publish("/av/status/capture/" + name, "offline")
       time.sleep(5.0)
 
 # The callback for when the client receives a CONNACK response from the server.
 def on_connect(client, userdata, flags, rc):
-    print("Connected to MQTT with result code "+str(rc))
+    sys.stderr.write("Connected to MQTT with result code "+str(rc))
 
 if __name__ == "__main__":
-  print("Starting telemetry...")
+  sys.stderr.write("Starting telemetry...\n")
   client = mqtt.Client()
   client.on_connect = on_connect
   client.connect("mqtt", 1883, 60)
 
+  base_dir = "/mnt/usb1/l2/vlog/"
   threads = [
-    threading.Thread(target=record, args=['l2', 'http://l2:8080/playlist.m3u8', 'l2_out.ts', client]),
-    threading.Thread(target=record, args=['picam1', 'http://picam1:8080/playlist.m3u8', 'picam1_out.ts', client]),
-    threading.Thread(target=record, args=['jetson1', 'http://jetson1:8080/playlist.m3u8', 'jetson1_out.ts', client]),
-    threading.Thread(target=record, args=['jetson2', 'http://jetson2:8080/playlist.m3u8', 'jetson2_out.ts', client]),
+    threading.Thread(target=record, args=[base_dir, 'http://l2:8080/playlist.m3u8', client]),
+    threading.Thread(target=record, args=[base_dir, 'http://picam1:8080/playlist.m3u8', client]),
+    threading.Thread(target=record, args=[base_dir, 'http://jetson1:8080/playlist.m3u8', client]),
+    threading.Thread(target=record, args=[base_dir, 'http://jetson2:8080/playlist.m3u8', client]),
   ]
-  print("Starting threads...")
+  sys.stderr.write("Starting threads...\n")
   for t in threads:
     t.alive = True
     t.daemon = True
     t.start()
 
-  print("Running(Ctrl+C to stop)")
+  sys.stderr.write("Running (Ctrl+C to stop)\n")
   try:
     client.loop_forever()
   except KeyboardInterrupt:
     pass
-  print("Stopping threads...")
+  sys.stderr.write("Stopping threads...\n")
   for t in threads:
     t.alive = False
   for t in threads:
     t.join()
-  print("Done")
+  sys.stderr.write("Done\n")
