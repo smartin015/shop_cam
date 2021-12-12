@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
 
 // Much of MQTT work inspired by https://github.com/debihiga/mqtt_paho_cpp_subscriber/blob/master/main.cpp
 const std::string ADDRESS("mqtt:1883");
@@ -15,6 +16,7 @@ const std::string START_RECORDING_CMD = "start_recording";
 const std::string STOP_RECORDING_CMD = "stop_recording";
 const int QOS = 1;
 const int N_RETRY_ATTEMPTS = 3;
+mqtt::async_client client(ADDRESS, HOSTNAME);
 
 typedef enum {
  PIPELINE_TYPE_UNKNOWN = 0,
@@ -231,6 +233,13 @@ void printHelp(char* argv0) {
 	  << "Optional: -s [realsense serial number]" << std::endl << std::endl;
 }
 
+void signal_handler(int s){
+  std::cerr << "Ctrl+C detected; disconnecting...\n" << std::flush;
+  client.disconnect()->wait();
+  std::cerr << "OK\n" << std::endl;
+  exit(0); 
+}
+
 int main (int argc, char *argv[]) {
   char hostname[1024];
   gethostname(hostname, 1024);
@@ -285,15 +294,22 @@ int main (int argc, char *argv[]) {
   }
 
   gst_init (&argc, &argv);
-  mqtt::async_client client(ADDRESS, HOSTNAME);
   mqtt::connect_options connOpts;
   connOpts.set_clean_session(true);    
   callback cb(client, connOpts, ptype, serial, outdir);
   client.set_callback(cb);
   client.connect(connOpts, nullptr, cb);
-  std::cin.get();
-  std::cerr << "Disconnecting..." << std::flush;
-  client.disconnect()->wait();
-  std::cerr << "OK" << std::endl;
+
+  // Setup signal handler
+  struct sigaction sigIntHandler;
+  sigIntHandler.sa_handler = signal_handler;
+  sigemptyset(&sigIntHandler.sa_mask);
+  sigIntHandler.sa_flags = 0;
+  sigaction(SIGINT, &sigIntHandler, NULL);
+
+  std::cerr << "Ctrl+C to exit\n" << std::flush;
+
+  pause();
+
   return 0;
 }

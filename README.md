@@ -133,6 +133,12 @@ Extending from framework checked in at https://github.com/jackersson/gst-python-
 `gstplugin_py` is the default example plugin
 
 ```
+sudo apt-get install libcairo2-dev libjpeg-dev libgif-dev -y
+pip3 install git+https://github.com/jackersson/gstreamer-python.git#egg=gstreamer-python
+
+```
+
+```
 export GST_PLUGIN_PATH=$GST_PLUGIN_PATH:$PWD/venv/lib/gstreamer-1.0/:$PWD/gst/
 gst-inspect-1.0 gstplugin_py
 gst-launch-1.0 videotestsrc ! gstplugin_py int-prop=100 float-prop=0.2 bool-prop=True str-prop="set" ! fakesink

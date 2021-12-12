@@ -1,0 +1,13 @@
+[Unit]
+Description=workshop camera service
+After=network.target
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+User=root
+ExecStart=/usr/bin/run_network_av
+
+[Install]
+WantedBy=multi-user.target
